@@ -39,6 +39,11 @@ def get_source_patches(name: str, cap_name: str) -> list[tuple[str, str]]:
         # Must rename to prevent binary sweep from corrupting DEX, and to hide
         # the "re.frida.helper" process name which is a detection vector.
         # Order: most specific first
+        # JNI format (used in Vala C output: find_class "re/frida/HelperBackend")
+        ("re/frida/HelperBackend", f"re/{name}/HelperBackend"),
+        ("re/frida/Helper", f"re/{name}/Helper"),
+        ("re/frida/Gadget", f"re/{name}/Gadget"),
+        # Java dot notation
         ("re.frida.Helper", f"re.{name}.Helper"),
         ("re.frida.helper", f"re.{name}.helper"),
         ("re.frida.Gadget", f"re.{name}.Gadget"),
