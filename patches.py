@@ -108,6 +108,8 @@ def get_rollback_patches(name: str) -> list[tuple[str, str]]:
         (f"{name}-server.version", "frida-server.version"),
         (f"{name}-server.plist", "frida-server.plist"),
         (f"{name}-server.xcent", "frida-server.xcent"),
+        # glib_flavor value in compat/meson.build — must be 'frida' or 'upstream'
+        (f"'{name}'", "'frida'"),
     ]
 
 
