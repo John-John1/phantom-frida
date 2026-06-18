@@ -221,11 +221,7 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
 
 		// Try am start command first (bypasses anti-spawn detection)
 		try {
-			String component = pkgName;
-			if (activity != null && !activity.isEmpty()) {
-				component = pkgName + "/" + activity;
-			}
-			ProcessBuilder pb = new ProcessBuilder("am", "start", "-n", component);
+			ProcessBuilder pb = new ProcessBuilder("am", "start", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", pkgName);
 			Process proc = pb.start();
 			int exitCode = proc.waitFor();
 			if (exitCode == 0) {
