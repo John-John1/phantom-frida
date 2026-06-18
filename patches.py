@@ -196,16 +196,17 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
         # Fix spawn: add error handling, retry, and increase timeout
         return [
             (
-                'yield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\tvar timeout = new TimeoutSource.seconds (20);',
-                'try {\n\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t// Ignore stop errors\n\t\t\t}\n\n\t\t\tThread.usleep (2000000);\n\n\t\t\tvar started = false;\n\t\t\tfor (var attempt = 0; attempt < 3 && !started; attempt++) {\n\t\t\t\ttry {\n\t\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\t\t\t\t\tstarted = true;\n\t\t\t\t} catch (GLib.Error start_err) {\n\t\t\t\t\tThread.usleep (1000000);\n\t\t\t\t}\n\t\t\t}\n\t\t\tif (!started)\n\t\t\t\tthrow new Error.NOT_SUPPORTED ("Failed to start package after 3 attempts");\n\n\t\t\tvar timeout = new TimeoutSource.seconds (60);'
+                'yield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (20);',
+                'try {\n\t\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t\t// Ignore stop errors\n\t\t\t\t}\n\n\t\t\t\tThread.usleep (2000000);\n\n\t\t\t\tvar started = false;\n\t\t\t\tfor (var attempt = 0; attempt < 3 && !started; attempt++) {\n\t\t\t\t\ttry {\n\t\t\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\t\t\t\t\t\tstarted = true;\n\t\t\t\t\t} catch (GLib.Error start_err) {\n\t\t\t\t\t\tThread.usleep (1000000);\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tif (!started)\n\t\t\t\t\tthrow new Error.NOT_SUPPORTED ("Failed to start package after 3 attempts");\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (120);'
             ),
         ]
 
     elif target == "helper_backend":
         # android-helper/re/icuserviceio/HelperBackend.java
-        # Fix spawn: use am start command + retry logic
+        # Fix spawn: add am start fallback + retry logic for DeadSystemRuntimeException
         return [
             # Add am start fallback before reflection-based startActivity
+            # Matches lines 633-639 of original HelperBackend.java (1 tab method, 2 tabs body, 3 tabs try)
             (
                 '''private JSONArray startActivity(JSONArray request) throws JSONException {
 		String pkgName = request.getString(1);
@@ -222,13 +223,25 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
 		// Try am start command first (bypasses anti-spawn detection)
 		try {
 			Intent launchIntent = mPackageManager.getLaunchIntentForPackage(pkgName);
-				if (launchIntent != null && launchIntent.getComponent() != null) {
-					String component = launchIntent.getComponent().flattenToString();
-					ProcessBuilder pb = new ProcessBuilder("am", "start", "-n", component);
-			Process proc = pb.start();
-			int exitCode = proc.waitFor();
-			if (exitCode == 0) {
-				return okVoid();
+			if (launchIntent != null && launchIntent.getComponent() != null) {
+				String component = launchIntent.getComponent().flattenToString();
+				ProcessBuilder pb = new ProcessBuilder("am", "start", "-n", component);
+				pb.redirectErrorStream(true);
+				Process proc = pb.start();
+				proc.waitFor(java.util.concurrent.TimeUnit.SECONDS.toMillis(10), java.util.concurrent.TimeUnit.NANOSECONDS);
+				int exitCode = proc.exitValue();
+				if (exitCode == 0) {
+					return okVoid();
+				}
+			} else if (launchIntent != null) {
+				ProcessBuilder pb = new ProcessBuilder("am", "start", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", "-p", pkgName);
+				pb.redirectErrorStream(true);
+				Process proc = pb.start();
+				proc.waitFor(java.util.concurrent.TimeUnit.SECONDS.toMillis(10), java.util.concurrent.TimeUnit.NANOSECONDS);
+				int exitCode = proc.exitValue();
+				if (exitCode == 0) {
+					return okVoid();
+				}
 			}
 		} catch (Exception amErr) {
 			// Fall through to reflection-based approach
@@ -238,14 +251,15 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
 			getApplicationInfoForUser(pkgName, uid);'''
             ),
             # Add retry logic for DeadSystemRuntimeException
+            # Matches lines 681-686 of original HelperBackend.java (3 tabs inside try block)
             (
-                '''if (mStartActivityAsUser != null)
+                '''\t\t\tif (mStartActivityAsUser != null)
 				startActivityViaAtm(intent, uid, pkgName);
 			else
 				startActivityViaAm(intent, uid, pkgName);
 
 			return okVoid();''',
-                '''// Retry logic for DeadSystemRuntimeException
+                '''\t\t\t// Retry logic for DeadSystemRuntimeException
 			int maxRetries = 3;
 			for (int attempt = 0; attempt < maxRetries; attempt++) {
 				try {
@@ -256,8 +270,8 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
 					return okVoid();
 				} catch (Throwable retryErr) {
 					String errName = retryErr.getClass().getSimpleName();
-					if (errName.contains("DeadSystem") && attempt < maxRetries - 1) {
-						try { Thread.sleep(2000); } catch (InterruptedException ie) {}
+					if ((errName.contains("DeadSystem") || errName.contains("RuntimeException")) && attempt < maxRetries - 1) {
+						try { Thread.sleep(2000 * (attempt + 1)); } catch (InterruptedException ie) {}
 						continue;
 					}
 					throw retryErr;

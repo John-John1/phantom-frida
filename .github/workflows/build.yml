@@ -31,10 +31,10 @@ on:
         type: boolean
         default: true
       temp_fixes:
-        description: 'Stability fixes (perfetto skip, cloak detach)'
+        description: 'Stability fixes (always enabled now)'
         required: false
         type: boolean
-        default: false
+        default: true
 
 jobs:
   build:

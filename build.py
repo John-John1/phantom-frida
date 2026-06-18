@@ -930,9 +930,8 @@ Detection vectors covered:
         # Apply port patch even without --extended
         apply_extended_patches(frida_dir, custom_name, args.port)
 
-    # Step 4: Stability fixes
-    if args.temp_fixes:
-        apply_stability_fixes(frida_dir, frida_major)
+    # Step 4: Stability fixes (always apply for spawn stability)
+    apply_stability_fixes(frida_dir, frida_major)
 
     if args.skip_build:
         log("=" * 60, "HEADER")
