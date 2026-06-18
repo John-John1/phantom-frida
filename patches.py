@@ -203,8 +203,42 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
 
     elif target == "helper_backend":
         # android-helper/re/icuserviceio/HelperBackend.java
-        # Fix spawn: add retry logic for DeadSystemRuntimeException in startActivity
+        # Fix spawn: use am start command + retry logic
         return [
+            # Add am start fallback before reflection-based startActivity
+            (
+                '''private JSONArray startActivity(JSONArray request) throws JSONException {
+		String pkgName = request.getString(1);
+		String activity = request.isNull(2) ? null : request.getString(2);
+		int uid = request.getInt(3);
+
+		try {
+			getApplicationInfoForUser(pkgName, uid);''',
+                '''private JSONArray startActivity(JSONArray request) throws JSONException {
+		String pkgName = request.getString(1);
+		String activity = request.isNull(2) ? null : request.getString(2);
+		int uid = request.getInt(3);
+
+		// Try am start command first (bypasses anti-spawn detection)
+		try {
+			String component = pkgName;
+			if (activity != null && !activity.isEmpty()) {
+				component = pkgName + "/" + activity;
+			}
+			ProcessBuilder pb = new ProcessBuilder("am", "start", "-n", component);
+			Process proc = pb.start();
+			int exitCode = proc.waitFor();
+			if (exitCode == 0) {
+				return okVoid();
+			}
+		} catch (Exception amErr) {
+			// Fall through to reflection-based approach
+		}
+
+		try {
+			getApplicationInfoForUser(pkgName, uid);'''
+            ),
+            # Add retry logic for DeadSystemRuntimeException
             (
                 '''if (mStartActivityAsUser != null)
 				startActivityViaAtm(intent, uid, pkgName);
