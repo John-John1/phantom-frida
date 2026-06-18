@@ -196,8 +196,8 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
         # Fix spawn: add error handling, retry, and increase timeout
         return [
             (
-                'yield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (20);',
-                'try {\n\t\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t\t// Ignore stop errors\n\t\t\t\t}\n\n\t\t\t\tThread.usleep (2000000);\n\n\t\t\t\tvar started = false;\n\t\t\t\tfor (var attempt = 0; attempt < 3 && !started; attempt++) {\n\t\t\t\t\ttry {\n\t\t\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\t\t\t\t\t\tstarted = true;\n\t\t\t\t\t} catch (GLib.Error start_err) {\n\t\t\t\t\t\tThread.usleep (1000000);\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tif (!started)\n\t\t\t\t\tthrow new Error.NOT_SUPPORTED ("Failed to start package after 3 attempts");\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (60);'
+                'yield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\tvar timeout = new TimeoutSource.seconds (20);',
+                'try {\n\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t// Ignore stop errors\n\t\t\t}\n\n\t\t\tThread.usleep (2000000);\n\n\t\t\tvar started = false;\n\t\t\tfor (var attempt = 0; attempt < 3 && !started; attempt++) {\n\t\t\t\ttry {\n\t\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\t\t\t\t\tstarted = true;\n\t\t\t\t} catch (GLib.Error start_err) {\n\t\t\t\t\tThread.usleep (1000000);\n\t\t\t\t}\n\t\t\t}\n\t\t\tif (!started)\n\t\t\t\tthrow new Error.NOT_SUPPORTED ("Failed to start package after 3 attempts");\n\n\t\t\tvar timeout = new TimeoutSource.seconds (60);'
             ),
         ]
 
