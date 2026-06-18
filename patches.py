@@ -191,6 +191,17 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
             ("'frida-agent-universal'", f"'{name}-agent-universal'"),
         ]
 
+    elif target == "linux_host_session":
+        # subprojects/frida-core/src/linux/linux-host-session.vala
+        # Fix spawn: add error handling for stop_package and increase timeout
+        return [
+            # Wrap stop_package in try-catch and add delay
+            (
+                'yield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (20);',
+                'try {\n\t\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t\t// Ignore stop errors (app may not be running)\n\t\t\t\t}\n\n\t\t\t\t// Delay to allow system to clean up\n\t\t\t\tvar delay = new TimeoutSource.seconds (2);\n\t\t\t\tdelay.set_callback (() => { return false; });\n\t\t\t\tdelay.attach (MainContext.get_thread_default ());\n\t\t\t\tyield;\n\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (30);'
+            ),
+        ]
+
     return []
 
 
@@ -264,17 +275,6 @@ def SELINUX_PATCHES(name: str) -> list[tuple[str, str]]:
         (":frida_file", f":{name}_file"),
         (":frida_memfd", f":{name}_memfd"),
     ]
-
-    elif target == "linux_host_session":
-        # subprojects/frida-core/src/linux/linux-host-session.vala
-        # Fix spawn: add error handling for stop_package and increase timeout
-        return [
-            # Wrap stop_package in try-catch and add delay
-            (
-                'yield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (20);',
-                '''try {\n\t\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t\t// Ignore stop errors (app may not be running)\n\t\t\t\t}\n\n\t\t\t\t// Delay to allow system to clean up\n\t\t\t\tvar delay = new TimeoutSource.seconds (2);\n\t\t\t\tdelay.set_callback (() => { return false; });\n\t\t\t\tdelay.attach (MainContext.get_thread_default ());\n\t\t\t\tyield;\n\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (30);'''
-            ),
-        ]
 
 
 # ============================================================================
