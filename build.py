@@ -479,6 +479,7 @@ def apply_targeted_patches(frida_dir: Path, custom_name: str, frida_major: int):
         "gadget_meson": core_dir / "lib" / "gadget" / "meson.build",
         "agent_meson": core_dir / "lib" / "agent" / "meson.build",
         "linux_host_session": core_dir / "src" / "linux" / "linux-host-session.vala",
+        "helper_backend": core_dir / "src" / "android-helper" / "re" / custom_name / "HelperBackend.java",
     }
 
     for target_name, target_file in targets.items():

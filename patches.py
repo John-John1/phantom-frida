@@ -201,6 +201,39 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
             ),
         ]
 
+    elif target == "helper_backend":
+        # android-helper/re/icuserviceio/HelperBackend.java
+        # Fix spawn: add retry logic for DeadSystemRuntimeException in startActivity
+        return [
+            (
+                '''if (mStartActivityAsUser != null)
+				startActivityViaAtm(intent, uid, pkgName);
+			else
+				startActivityViaAm(intent, uid, pkgName);
+
+			return okVoid();''',
+                '''// Retry logic for DeadSystemRuntimeException
+			int maxRetries = 3;
+			for (int attempt = 0; attempt < maxRetries; attempt++) {
+				try {
+					if (mStartActivityAsUser != null)
+						startActivityViaAtm(intent, uid, pkgName);
+					else
+						startActivityViaAm(intent, uid, pkgName);
+					return okVoid();
+				} catch (Throwable retryErr) {
+					String errName = retryErr.getClass().getSimpleName();
+					if (errName.contains("DeadSystem") && attempt < maxRetries - 1) {
+						try { Thread.sleep(2000); } catch (InterruptedException ie) {}
+						continue;
+					}
+					throw retryErr;
+				}
+			}
+			return error("NOT_SUPPORTED", "Failed after " + maxRetries + " attempts");'''
+            ),
+        ]
+
     return []
 
 
