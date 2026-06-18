@@ -193,13 +193,13 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
 
     elif target == "linux_host_session":
         # subprojects/frida-core/src/linux/linux-host-session.vala
-        # Fix spawn: start → kill by timeout → restart (cached) → inject
-        # Heavy apps (TikTok) exceed Android's PROC_START_TIMEOUT (~10s).
-        # Second start is faster because app data is cached in memory.
+        # Fix spawn: error handling + longer timeout. NO delays between
+        # start_package and PID monitoring — frida must inject before
+        # Android's PROC_START_TIMEOUT (~10s) kills the process.
         return [
             (
                 'yield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (20);',
-                'try {\n\t\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t\t// Ignore stop errors\n\t\t\t\t}\n\n\t\t\t\t// First start: will be killed by Android PROC_START_TIMEOUT for heavy apps\n\t\t\t\ttry {\n\t\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\t\t\t\t} catch (GLib.Error first_err) {\n\t\t\t\t\t// Ignore first start errors\n\t\t\t\t}\n\n\t\t\t\t// Wait for PROC_START_TIMEOUT to kill the process (~10s)\n\t\t\t\tThread.usleep (12000000);\n\n\t\t\t\t// Second start: app data is cached, should be faster\n\t\t\t\tvar started = false;\n\t\t\t\tfor (var attempt = 0; attempt < 3 && !started; attempt++) {\n\t\t\t\t\ttry {\n\t\t\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\t\t\t\t\t\tstarted = true;\n\t\t\t\t\t} catch (GLib.Error start_err) {\n\t\t\t\t\t\tThread.usleep (2000000);\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tif (!started)\n\t\t\t\t\tthrow new Error.NOT_SUPPORTED ("Failed to start package after retry");\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (120);'
+                'try {\n\t\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t\t// Ignore stop errors\n\t\t\t\t}\n\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (120);'
             ),
         ]
 
