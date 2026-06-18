@@ -58,21 +58,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential curl git python3 unzip
 
+      # Determine NDK version from Frida version
+      - name: Determine NDK version
+        id: ndk-version
+        run: |
+          FRIDA_VER="${{ inputs.frida_version }}"
+          MAJOR=$(echo "$FRIDA_VER" | cut -d. -f1)
+          MINOR=$(echo "$FRIDA_VER" | cut -d. -f2)
+          if [ "$MAJOR" -ge 17 ] && [ "$MINOR" -ge 9 ]; then
+            echo "ndk=r29" >> $GITHUB_OUTPUT
+          else
+            echo "ndk=r25c" >> $GITHUB_OUTPUT
+          fi
+
       # Cache NDK (~1.5 GB) — saves ~3 min on subsequent runs
       - name: Cache NDK
         uses: actions/cache@v4
         id: ndk-cache
         with:
-          path: build/android-ndk-r29
-          key: ndk-r29-linux
+          path: build/android-ndk-${{ steps.ndk-version.outputs.ndk }}
+          key: ndk-${{ steps.ndk-version.outputs.ndk }}-linux
 
       - name: Download NDK
         if: steps.ndk-cache.outputs.cache-hit != 'true'
         run: |
+          NDK_VER="${{ steps.ndk-version.outputs.ndk }}"
           mkdir -p build
-          curl -L -o build/android-ndk-r29-linux.zip \
-            https://dl.google.com/android/repository/android-ndk-r29-linux.zip
-          cd build && unzip -q android-ndk-r29-linux.zip && rm android-ndk-r29-linux.zip
+          curl -L -o "build/android-ndk-${NDK_VER}-linux.zip" \
+            "https://dl.google.com/android/repository/android-ndk-${NDK_VER}-linux.zip"
+          cd build && unzip -q "android-ndk-${NDK_VER}-linux.zip" && rm "android-ndk-${NDK_VER}-linux.zip"
 
       # Cache Frida source tree — saves ~5 min clone time
       - name: Cache Frida source
@@ -105,7 +119,7 @@ jobs:
           CMD="python3 build.py --version ${{ inputs.frida_version }}"
           CMD="$CMD --name ${{ inputs.custom_name }}"
           CMD="$CMD --arch ${{ inputs.arch }}"
-          CMD="$CMD --skip-clone --ndk-path build/android-ndk-r29"
+          CMD="$CMD --skip-clone --ndk-path build/android-ndk-${{ steps.ndk-version.outputs.ndk }}"
           CMD="$CMD --verify"
 
           if [ -n "${{ inputs.port }}" ]; then
