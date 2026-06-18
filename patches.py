@@ -193,12 +193,11 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
 
     elif target == "linux_host_session":
         # subprojects/frida-core/src/linux/linux-host-session.vala
-        # Fix spawn: add error handling for stop_package and increase timeout
+        # Fix spawn: add error handling, retry, and increase timeout
         return [
-            # Wrap stop_package in try-catch and add delay
             (
                 'yield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (20);',
-                'try {\n\t\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t\t// Ignore stop errors (app may not be running)\n\t\t\t\t}\n\n\t\t\t\t// Delay to allow system to clean up\n\t\t\t\tvar delay = new TimeoutSource.seconds (2);\n\t\t\t\tdelay.set_callback (() => { return false; });\n\t\t\t\tdelay.attach (MainContext.get_thread_default ());\n\t\t\t\tyield;\n\n\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (30);'
+                'try {\n\t\t\t\t\tyield helper.stop_package (package, entrypoint.uid, cancellable);\n\t\t\t\t} catch (GLib.Error stop_err) {\n\t\t\t\t\t// Ignore stop errors\n\t\t\t\t}\n\n\t\t\t\tThread.usleep (2000000);\n\n\t\t\t\tvar started = false;\n\t\t\t\tfor (var attempt = 0; attempt < 3 && !started; attempt++) {\n\t\t\t\t\ttry {\n\t\t\t\t\t\tyield helper.start_package (package, entrypoint, cancellable);\n\t\t\t\t\t\tstarted = true;\n\t\t\t\t\t} catch (GLib.Error start_err) {\n\t\t\t\t\t\tThread.usleep (1000000);\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\tif (!started)\n\t\t\t\t\tthrow new Error.NOT_SUPPORTED ("Failed to start package after 3 attempts");\n\n\t\t\t\tvar timeout = new TimeoutSource.seconds (60);'
             ),
         ]
 
